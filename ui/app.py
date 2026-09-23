@@ -172,6 +172,20 @@ def render_sidebar():
                     st.session_state.qa_state = {}
                     st.rerun()
 
+        # LLM Router & Circuit Breaker Telemetry Monitor
+        st.divider()
+        with st.expander("⚡ LLM Router & Circuit Breakers", expanded=False):
+            telemetry = get_llm().get_telemetry()
+            st.caption(f"Strategy: **{telemetry['routing_strategy']}** | Success: **{telemetry['overall_success_rate_pct']}%**")
+            st.caption(f"Routed: **{telemetry['total_routed_requests']}** | Failovers: **{telemetry['total_failovers']}**")
+            st.markdown("---")
+            for mname, data in telemetry["endpoints"].items():
+                short_name = mname.split("/")[-1]
+                state = data["circuit_breaker"]["state"]
+                state_color = "🟢" if state == "CLOSED" else ("🟡" if state == "HALF_OPEN" else "🔴")
+                st.markdown(f"**{state_color} {short_name}**")
+                st.caption(f"State: `{state}` | Latency: `{data['avg_latency_s']}s` | Req: `{data['successful_requests']}/{data['total_requests']}`")
+
     return page
 
 # ──────────────────────────────────────────────

@@ -1,0 +1,17 @@
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+.git
+.gitignore
+.env
+.venv
+venv/
+data/sessions/*
+data/uploads/*
+data/reports/*
+!data/sessions/.gitkeep
+!data/uploads/.gitkeep
+!data/reports/.gitkeep
+*.zip

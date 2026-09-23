@@ -35,13 +35,19 @@ class RAGPipeline:
         return self._chunks
 
     def _chunk_text(self, text: str) -> List[str]:
-        text = re.sub(r"\n{3,}", "\n\n", text)
+        text = re.sub(r"\n{3,}", "\n\n", text).strip()
+        if not text:
+            return []
+        if len(text) <= CHUNK_SIZE:
+            return [text]
         chunks, start = [], 0
         while start < len(text):
             end = min(start + CHUNK_SIZE, len(text))
             chunk = text[start:end].strip()
-            if len(chunk) > 50:
+            if chunk:
                 chunks.append(chunk)
+            if end >= len(text):
+                break
             start = end - CHUNK_OVERLAP
         return chunks
 

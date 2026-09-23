@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  # FastAPI REST API Backend
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: exam_tutor_api
+    ports:
+      - "8000:8000"
+    environment:
+      - HF_TOKEN=${HF_TOKEN:-}
+      - TUTOR_DB_PATH=/app/data/sessions/knowledge.db
+    volumes:
+      - tutor_data:/app/data
+    command: uvicorn api.main:app --host 0.0.0.0 --port 8000
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Streamlit Interactive UI Frontend
+  ui:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: exam_tutor_ui
+    ports:
+      - "8501:8501"
+    environment:
+      - HF_TOKEN=${HF_TOKEN:-}
+      - TUTOR_DB_PATH=/app/data/sessions/knowledge.db
+    volumes:
+      - tutor_data:/app/data
+    command: streamlit run ui/app.py --server.port 8501 --server.address 0.0.0.0
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  tutor_data:
+    driver: local

@@ -1,39 +1,43 @@
-# 🎓 Exam Tutor AI
+# 🎓 Exam Tutor AI — Grounded Agentic RAG with Automated Evaluation & Production Packaging
 
-An adaptive study assistant that ingests your syllabus and quizzes you intelligently — focusing on what you **don't** know and skipping what you **do**.
+An adaptive, syllabus-grounded AI exam tutor built on **Grounded Agent Architecture**, **Automated Multi-Metric Evaluation Framework**, and **Production-Ready REST Service Packaging (FastAPI + Docker)**.
 
-Built on top of [NeoTutor](https://github.com/NeoTutor) (LangGraph agent loop) with:
-- **RAG over your own syllabus PDF** (FAISS + sentence-transformers)
-- **Per-topic knowledge state** (SQLite, persists across sessions)
-- **Free LLMs via HuggingFace Inference API** (no local GPU needed)
-- **Adaptive difficulty** (easy → medium → hard based on performance)
-- **MCQ + Descriptive** question types
-- **Streamlit UI** with topic progress tracking
+Focuses dynamically on what students **don't** know, eliminating hallucinations with syllabus entailment verification, and tracking topic mastery over time.
 
 ---
 
-## 🚀 Quick Start
+## 🌟 Key Architecture Pillars
 
-### 1. Install dependencies
-```bash
-pip install -r requirements.txt
-```
+### 1. 🛡️ Grounded Agent Architecture & Hallucination Elimination
+- **FactVerificationAgent (`core/grounding.py`)**: Dedicated verification agent executing automated claim extraction, syllabus context entailment checks, and citation linking.
+- **Refinement & Self-Correction Loops**: Automatic regenerating / grounding adjustment if claim confidence falls below $0.75$ or detects ungrounded contradictions.
+- **Citation Attribution**: Every question premise and grading explanation returns grounding confidence and context citation quotes.
 
-### 2. Get a free HuggingFace token
-Go to https://huggingface.co/settings/tokens → Create a **read** token (free).
+### 2. 📊 Automated Evaluation & Drift Framework (`eval/`)
+- **Retrieval Faithfulness**: Stopword-filtered content token precision and morphological stem overlap against retrieved context chunks.
+- **Structured JSON Schema Validity**: Strict Pydantic model validation (`MCQQuestionSchema`, `DescriptiveEvalSchema`) measuring structured generation reliability.
+- **Semantic Uncertainty & Predictive Entropy**: Shannon entropy $H(X) = -\sum p(x) \log_2 p(x)$ assessing LLM decision ambiguity.
+- **Confidence Calibration**: Brier Score ($BS = \frac{1}{N}\sum(f_t - o_t)^2$) and Expected Calibration Error (ECE) across multi-bin reliability diagrams.
+- **Concept & Mastery Drift Detection**:
+  - **Population Stability Index (PSI)**: Detects distribution shifts across historical and current mastery states.
+  - **2-Sample Kolmogorov-Smirnov (KS) Test**: Evaluates whether score distributions have statistically drifted ($p < 0.05$).
+- **Benchmark Suite**: Run automated evaluations via CLI (`python -m eval.benchmark`) or REST API (`/v1/eval/benchmark`).
 
-### 3. Run the app
-```bash
-cd exam_tutor
-streamlit run ui/app.py
-```
+### 3. 🚀 Modular Production Service Packaging (`api/` & `Docker`)
+- **FastAPI REST Service (`api/main.py`)**:
+  - `/v1/syllabus/upload-text`, `/v1/syllabus/upload-file`: Multi-format syllabus ingestion & TF-IDF indexing.
+  - `/v1/sessions/*`: Stateful session management, topic mastery progress, and adaptive difficulty.
+  - `/v1/sessions/{id}/next-question`: Fact-verified question generation.
+  - `/v1/sessions/{id}/submit-answer`: Fact-checked grading and knowledge state updating.
+  - `/v1/eval/benchmark`: On-demand automated evaluation harness runs.
+  - `/v1/health`, `/v1/metrics`, `/v1/router/status`: Observability, router telemetry, and circuit breaker metrics.
+- **Containerization**: Multi-stage `Dockerfile` and `docker-compose.yml` orchestrating both the FastAPI REST backend and Streamlit Web UI.
 
-### 4. Use the app
-1. **Upload Syllabus** tab → upload your PDF or paste text
-2. Enter your HuggingFace token in the sidebar
-3. Switch to **Study Session** → start answering questions
-4. Hit **⏭️ I know this, skip** on topics you're confident about
-5. Check **Dashboard** for weak topics to revise
+### 4. ⚡ Load-Balanced, Fault-Tolerant LLM Router (`core/router.py`)
+- **Per-Model Circuit Breaker**: 3-state state machine (`CLOSED` -> `OPEN` -> `HALF_OPEN`) with configurable failure thresholds (e.g. 3 consecutive failures) and cooldown windows (e.g. 20s).
+- **Dynamic Load Balancing**: Round-Robin, Least-Failures, and Priority-Failover strategies across `Qwen2.5-72B-Instruct`, `Mistral-7B-Instruct-v0.3`, and `zephyr-7b-beta`.
+- **Zero-Latency Fast Rejection & Failover**: Immediately bypasses failing or open-circuit models without incurring network timeout stalls.
+- **In-Memory Telemetry**: Real-time tracking of request counts, failure rates, EMA/P95 latencies, and total failovers.
 
 ---
 
@@ -41,76 +45,123 @@ streamlit run ui/app.py
 
 ```
 exam_tutor/
+├── api/
+│   ├── main.py                  # FastAPI RESTful application with versioned /v1 endpoints
+│   └── schemas.py               # Pydantic request/response data contracts
 ├── core/
-│   ├── llm.py              # HuggingFace Inference API wrapper (Qwen2.5, Mistral fallback)
-│   ├── agents.py           # 4 LangGraph agents (assess, explain, quiz, progress)
-│   ├── knowledge_tracker.py # Per-topic mastery scores (SQLite)
-│   └── workflow.py         # LangGraph StateGraph wiring
+│   ├── router.py                # LLMRouter, ModelEndpoint, CircuitBreaker, and telemetry
+│   ├── llm.py                   # LLMClient interface backed by LLMRouter
+│   ├── grounding.py             # FactVerificationAgent, claim extraction, citation linking
+│   ├── agents.py                # 4 LangGraph agents (assess, explain, quiz, progress)
+│   ├── knowledge_tracker.py     # Per-topic mastery scores (SQLite + EMA tracking)
+│   └── workflow.py              # LangGraph StateGraph wiring
+├── eval/
+│   ├── metrics.py               # Faithfulness, Schema Validity, Entropy, ECE/Brier, PSI & KS Drift
+│   └── benchmark.py             # EvaluationHarness & CLI benchmark runner
 ├── rag/
-│   └── pipeline.py         # PDF ingestion, chunking, FAISS index, topic extraction
+│   └── pipeline.py              # Document chunking, TF-IDF vector index, topic extraction
 ├── ui/
-│   └── app.py              # Streamlit multi-page UI
-├── data/
-│   ├── sessions/           # SQLite knowledge state DB
-│   └── uploads/            # FAISS indexes per session
-└── requirements.txt
+│   └── app.py                   # Streamlit multi-page UI with radar charts, citations, & router telemetry
+├── tests/
+│   ├── run_tests.py             # End-to-end 10-part test suite runner
+│   ├── test_router_concurrency.py # Router lifecycle & 20-worker concurrency failover tests
+│   └── test_grounding_and_eval.py # Pytest automated test suite
+├── Dockerfile                   # Multi-stage production container build
+├── docker-compose.yml           # Multi-service orchestration (FastAPI + Streamlit)
+├── requirements.txt             # Core dependencies
+└── README.md
 ```
 
 ---
 
-## 🧠 How It Works
+## 🚀 Quick Start
+
+### 1. Local Setup
+```bash
+# Clone and create virtualenv
+git clone <repo-url>
+cd exam_tutor
+python -m venv .venv
+source .venv/bin/activate  # Or on Windows: .venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+```
+
+### 2. Run Verification Tests & Benchmarks
+```bash
+# Run complete 9-part verification test suite (FactVerification, Metrics, Drift, API, Benchmarks)
+python tests/run_tests.py
+
+# Run pytest test suite
+pytest tests/test_grounding_and_eval.py -v
+
+# Run evaluation benchmark runner
+python -m eval.benchmark --mock --rounds 4
+```
+
+### 3. Launch FastAPI REST Service
+```bash
+uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
+```
+Interactive Swagger API documentation available at: `http://localhost:8000/docs`
+
+### 4. Launch Streamlit Web UI
+```bash
+streamlit run ui/app.py
+```
+Access the application UI at: `http://localhost:8501`
+
+### 5. Run with Docker Compose
+```bash
+docker compose up --build
+```
+- **REST API & Swagger Docs**: `http://localhost:8000/docs`
+- **Streamlit Web UI**: `http://localhost:8501`
+
+---
+
+## 🧠 Adaptive Mastery & Study Loop
 
 ```
-[Upload syllabus PDF]
-       ↓
-[RAG: chunk → embed → FAISS index]
-       ↓
-[LLM extracts topic list]
-       ↓
-[Knowledge Tracker initialises all topics at score=0]
-       ↓
-[Study Loop]
-  ├── Pick weakest topic (lowest mastery score)
-  ├── Retrieve relevant syllabus context (RAG)
-  ├── Generate MCQ or descriptive question (LLM)
-  ├── User answers (or skips "I know this")
-  ├── Evaluate answer → give feedback (LLM)
-  ├── Update topic score (exponential moving average)
-  ├── Adapt difficulty (easy/medium/hard)
-  └── Repeat
-       ↓
-[Session Summary: weak topics to revise]
+[Upload Syllabus (PDF/Text)]
+            ↓
+[RAG Ingestion: Chunking & Indexing]
+            ↓
+[Topic Extraction & Knowledge Tracker Initialization]
+            ↓
+┌───────────[ Adaptive Study Loop ]────────────────────────┐
+│ 1. Prioritize weakest topics via Knowledge Tracker       │
+│ 2. Retrieve syllabus context chunks (RAG)                │
+│ 3. Generate adaptive MCQ / Descriptive question (LLM)    │
+│ 4. FactVerificationAgent: entailment & citation check    │
+│ 5. Evaluate user answer & provide syllabus-grounded tips │
+│ 6. Update topic mastery score via Exponential Moving Avg │
+│ 7. Adapt difficulty level (Easy → Medium → Hard)         │
+└──────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 🤖 LLMs Used (Free)
+## 📈 Evaluation Metrics Summary
 
-| Model | Used For |
-|---|---|
-| `Qwen/Qwen2.5-72B-Instruct` | Question generation, feedback (primary) |
-| `mistralai/Mistral-7B-Instruct-v0.3` | Fallback if primary rate-limited |
-| `HuggingFaceH4/zephyr-7b-beta` | Second fallback |
-| `sentence-transformers/all-MiniLM-L6-v2` | Local embeddings (no API key) |
-
-All LLM calls use HuggingFace Inference API free tier. If you hit rate limits, wait 60s.
-
----
-
-## 🔧 Configuration
-
-| Env Variable | Default | Description |
+| Metric | Target | Formula / Method |
 |---|---|---|
-| `HF_TOKEN` | (set in UI) | HuggingFace read token |
-| `TUTOR_DB_PATH` | `data/sessions/knowledge.db` | SQLite DB path |
+| **Retrieval Faithfulness** | $\ge 85\%$ | $\frac{\|T_{\text{gen}} \cap T_{\text{ctx}}\|}{\|T_{\text{gen}}\|}$ over content tokens & word stems |
+| **JSON Schema Validity** | $100\%$ | Pydantic strict model validation (`MCQQuestionSchema`) |
+| **Semantic Uncertainty** | Minimized | Shannon entropy $H(X) = -\sum p_i \log_2 p_i$ across answer samples |
+| **Calibration (ECE & Brier)** | $\text{ECE} \le 0.10$ | Expected Calibration Error over binned confidence & Brier Score |
+| **Topic Drift (PSI & KS)** | $\text{PSI} < 0.10$ | Population Stability Index & 2-sample Kolmogorov-Smirnov test |
 
 ---
 
-## 📦 Credits
+## 🤖 LLM Strategy & Zero-Cost Architecture
 
-- **NeoTutor** — original LangGraph agent loop (`AIAgent_Tutor_System.ipynb`)
-- **LangGraph** — agent state graph
-- **sentence-transformers** — local embeddings
-- **FAISS** — vector search
-- **PyMuPDF** — PDF text extraction
-- **Streamlit** — UI framework
+- **Primary Model**: `Qwen/Qwen2.5-72B-Instruct` (Free tier on HuggingFace Inference API)
+- **Fallback Models**: `mistralai/Mistral-7B-Instruct-v0.3`, `HuggingFaceH4/zephyr-7b-beta`
+- **Offline / Mock Mode**: Set `MOCK_LLM=1` or pass `--mock` flag for zero-network testing and automated CI/CD pipelines.
+
+---
+
+## 📄 License
+MIT License. Built with open-source tools for robust, grounded, and observable AI education systems.
